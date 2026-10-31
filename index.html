@@ -78,6 +78,22 @@ footer button:hover,footer a:hover{color:var(--tx)}.cp{margin-top:22px!important
 @media(min-width:560px){.packs{grid-template-columns:repeat(3,1fr)}}
 @media(min-width:700px){.fg{grid-template-columns:2fr 1fr 1fr}}
 @media(min-width:900px){.grid.m{grid-template-columns:1fr 360px;align-items:start}.side{position:sticky;top:16px}.bar{display:none}body{padding-bottom:48px}h1{font-size:44px}.card{padding:22px}}
+
+/* Admin overview */
+.dashgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}
+.metric{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0}
+.metric .ml{font-size:12px;color:var(--mut);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.metric strong{display:block;font-size:clamp(22px,4vw,30px);letter-spacing:-.04em;line-height:1.2;margin-top:8px;overflow-wrap:anywhere}
+.metric small{display:block;color:var(--mut);font-size:12px;margin-top:5px}
+.dashhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 12px}
+.dashlist{display:grid;gap:0}
+.dashitem{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.dashitem:last-child{border-bottom:0}
+.dashitem b{display:block}
+.dashitem small{display:block;color:var(--mut);overflow-wrap:anywhere}
+.statuspill{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:4px 9px;font-size:11px;white-space:nowrap;background:var(--soft)}
+@media(max-width:650px){.dashgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{padding:12px}.dashitem{align-items:flex-start}.dashhead{align-items:flex-start;flex-wrap:wrap}}
+
 </style>
 </head>
 <body>
@@ -107,7 +123,7 @@ footer button:hover,footer a:hover{color:var(--tx)}.cp{margin-top:22px!important
 <script id="js">
 var $=function(i){return document.getElementById(i)};
 var sb=null,ZK=window.ZK||{};try{if(window.supabase&&ZK.SUPABASE_URL&&!/YOUR-/.test(ZK.SUPABASE_URL))sb=supabase.createClient(ZK.SUPABASE_URL,ZK.SUPABASE_ANON_KEY)}catch(x){}
-var C=JSON.parse($("cfg").textContent),ED=0,tab="prod",dirty=0,st={p:"",id:"",last:"",q:0,hq:0,pay:""};
+var C=JSON.parse($("cfg").textContent),ED=0,tab="dash",dirty=0,st={p:"",id:"",last:"",q:0,hq:0,pay:""};
 var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
 var fmt=function(n){return (n||0).toLocaleString("en-US")},eur=function(n){return "€"+n.toFixed(2)};
 var row=function(a,b){return '<div class="row"><span>'+a+'</span><b>'+b+'</b></div>'};
@@ -171,6 +187,32 @@ function toast(m){var t=$("toast");t.textContent=m;t.style.display="block";setTi
 function set(k,v){var a=k.split("."),o=C;for(var i=0;i<a.length-1;i++)o=o[a[i]];o[a[a.length-1]]=v}
 function fld(l,k,v,x){return '<div><label>'+l+'</label><input data-k="'+k+'" value="'+esc(v)+'" '+(x||"")+'></div>'}
 function num(l,k,v,x){return '<div><label>'+l+'</label><input type="number" data-k="'+k+'" value="'+v+'" '+(x||"")+'></div>'}
+
+function aDash(){return '<div class="dashhead"><div><h2 style="margin:0">Overview</h2><p class="hint" style="margin:3px 0 0">Store performance from the latest 100 orders.</p></div><button class="btn" data-act="refreshdash">Refresh</button></div><div id="dashdata"><div class="card pc">Loading dashboard…</div></div>'}
+async function dash(){
+ var host=$("dashdata");if(!host)return;
+ host.innerHTML='<div class="card pc">Loading dashboard…</div>';
+ try{
+  var r=await sb.from("orders").select("id,status,amount,pf,name,qty,email,created_at").order("created_at",{ascending:false}).limit(100);
+  if(r.error)throw r.error;
+  var rows=r.data||[], pending=rows.filter(function(x){return x.status=="awaiting_payment"}).length;
+  var paid=rows.filter(function(x){return ["paid","processing","completed"].indexOf(x.status)>=0});
+  var revenue=paid.reduce(function(n,x){return n+(Number(x.amount)||0)},0);
+  var done=rows.filter(function(x){return x.status=="completed"}).length;
+  var active= C.prod.filter(function(x){return !!x.on}).length;
+  var recent=rows.slice(0,8).map(function(x){
+   return '<div class="dashitem"><span><b>#'+x.id.slice(0,8).toUpperCase()+' · '+esc(x.pf+" "+x.name)+'</b><small>'+esc(x.email)+' · '+new Date(x.created_at).toLocaleDateString()+'</small></span><span style="text-align:right"><b>'+eur(Number(x.amount)||0)+'</b><small><span class="statuspill">'+esc(String(x.status||"").replace(/_/g," "))+'</span></small></span></div>'
+  }).join("");
+  host.innerHTML='<div class="dashgrid">'+
+   '<div class="metric"><div class="ml">Orders</div><strong>'+rows.length+'</strong><small>Latest 100 records</small></div>'+
+   '<div class="metric"><div class="ml">Awaiting payment</div><strong>'+pending+'</strong><small>Need payment confirmation</small></div>'+
+   '<div class="metric"><div class="ml">Paid / in progress</div><strong>'+paid.length+'</strong><small>'+done+' completed</small></div>'+
+   '<div class="metric"><div class="ml">Paid order value</div><strong>'+eur(revenue)+'</strong><small>Latest 100 records only</small></div>'+
+   '</div><div class="card pc"><div class="dashhead"><div><h2 style="margin:0">Store status</h2><p class="hint" style="margin:3px 0 0">Current catalogue</p></div></div><div class="dashgrid" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="metric"><div class="ml">Active products</div><strong>'+active+'</strong></div><div class="metric"><div class="ml">Total products</div><strong>'+C.prod.length+'</strong></div></div></div>'+
+   '<div class="card pc"><div class="dashhead"><h2 style="margin:0">Recent orders</h2><button class="btn" data-act="tab" data-v="ord">View all</button></div><div class="dashlist">'+(recent||'<p class="hint">No orders have been placed yet.</p>')+'</div></div>';
+ }catch(e){host.innerHTML='<div class="card pc"><b>Could not load dashboard.</b><p class="hint">'+esc(e.message||"Check Supabase permissions and try again.")+'</p><button class="btn" data-act="refreshdash">Try again</button></div>'}
+}
+
 function aProd(){var pf=[];C.prod.forEach(function(p){if(pf.indexOf(p.pf)<0)pf.push(p.pf)});
  return '<datalist id="pfl">'+pf.map(function(x){return '<option value="'+esc(x)+'">'}).join("")+'</datalist><button class="btn p" data-act="add" style="margin-bottom:12px">+ Add product</button>'+C.prod.map(function(p,i){var k="prod."+i+".";
  return '<div class="card pc"><div class="g2">'+fld("Platform",k+"pf",p.pf,'list="pfl"')+fld("Service name",k+"n",p.n)+'<div><label>Asks customer for</label><select data-k="'+k+'t"><option value="u"'+(p.t=="u"?" selected":"")+'>Username</option><option value="l"'+(p.t=="l"?" selected":"")+'>Post link</option></select></div>'+num("Price per 1,000 (€)",k+"r",p.r,'step="0.01" min="0"')+num("Minimum",k+"a",p.a,'min="1"')+num("Maximum",k+"b",p.b,'min="1"')+fld("Supplier service ID",k+"ps",p.ps||"",'placeholder="optional"')+'</div>'+fld("Badge on the service card",k+"bd",p.bd,'placeholder="e.g. Best value"')+'<div class="chs">'+BD.concat([""]).map(function(x){return '<button class="btn" data-act="bd" data-i="'+i+'" data-v="'+x+'">'+(x||"No badge")+'</button>'}).join("")+'</div><div class="ph"><label class="sw"><input type="checkbox" data-k="'+k+'on"'+(p.on?" checked":"")+'> Visible in store</label><span class="sp"></span><button class="btn d" data-act="del" data-i="'+i+'">Remove</button></div></div>'}).join("")}
@@ -195,8 +237,8 @@ function aTxt(){var f=C.foot,h=C.hero;
  return '<div class="card pc"><h2>Header and hero</h2>'+fld("Header notice (leave empty to hide)","brand.notice",C.brand.notice)+fld("Hero title","hero.h",h.h)+fld("Hero text","hero.p",h.p)+'</div><div class="card pc"><h2>Footer</h2>'+fld("About text","foot.about",f.about)+fld("Contact email","foot.mail",f.mail)+fld("Copyright line","foot.copy",f.copy)+'</div><div class="card pc"><h2>Policies</h2><p class="hint" style="margin:0 0 4px">Shown as footer links. Leave the text empty to hide one.</p>'+C.pol.map(function(p,i){return '<div class="pol">'+fld("Title","pol."+i+".t",p.t)+'<div><label>Text</label><textarea data-k="pol.'+i+'.b">'+esc(p.b)+'</textarea></div><button class="btn d" data-act="delpol" data-i="'+i+'">Remove</button></div>'}).join("")+'<button class="btn" data-act="addpol" style="margin-top:12px">+ Add policy</button></div>'}
 function adm(){var A=$("adm");
  if(!ED){A.innerHTML='<div class="ap"><div class="card" style="max-width:380px;margin:40px auto"><h2>Admin sign in</h2>'+(sb?'<div><label>Email</label><input type="email" id="le" autocomplete="username"></div><div style="margin-top:10px"><label>Password</label><input type="password" id="lp" autocomplete="current-password"></div><p class="em" id="lm"></p><button class="btn p" data-act="login" style="width:100%;margin-top:6px">Sign in</button>':'<p>Connect Supabase in config.js first.</p>')+'<button class="btn" data-act="back" style="width:100%;margin-top:8px">Back to store</button></div></div>';return}
- var T=[["prod","Products"],["ord","Orders"],["pay","Payments"],["look","Appearance"],["txt","Content"]];
- A.innerHTML='<div class="ah"><b>Admin</b><span class="sp"></span><span class="hint" id="dflag" style="margin:0">'+(dirty?"Unpublished changes":"")+'</span><button class="btn" data-act="back">View store</button><button class="btn" data-act="out">Sign out</button><button class="btn p" id="pubBtn" data-act="pub">Save changes</button></div><div class="atabs">'+T.map(function(t){return '<button class="btn" aria-pressed="'+(t[0]==tab)+'" data-act="tab" data-v="'+t[0]+'">'+t[1]+'</button>'}).join("")+'</div><div class="ap">'+({prod:aProd,ord:aOrd,pay:aPay,look:aLook,txt:aTxt})[tab]()+'</div>';if(tab=="ord")lo()}
+ var T=[["dash","Overview"],["prod","Products"],["ord","Orders"],["pay","Payments"],["look","Appearance"],["txt","Content"]];
+ A.innerHTML='<div class="ah"><b>Admin</b><span class="sp"></span><span class="hint" id="dflag" style="margin:0">'+(dirty?"Unpublished changes":"")+'</span><button class="btn" data-act="back">View store</button><button class="btn" data-act="out">Sign out</button><button class="btn p" id="pubBtn" data-act="pub">Save changes</button></div><div class="atabs">'+T.map(function(t){return '<button class="btn" aria-pressed="'+(t[0]==tab)+'" data-act="tab" data-v="'+t[0]+'">'+t[1]+'</button>'}).join("")+'</div><div class="ap">'+({dash:aDash,prod:aProd,ord:aOrd,pay:aPay,look:aLook,txt:aTxt})[tab]()+'</div>';if(tab=="ord")lo();if(tab=="dash")dash()}
 function route(){var h=location.hash,a=h=="#admin",t=h=="#track";$("adm").style.display=a?"block":"none";$("trk").style.display=t?"block":"none";document.body.style.overflow=a||t?"hidden":"";if(a)adm();else if(t)trk();else draw()}
 async function load(){if(!sb)return;try{var s=await sb.from("settings").select("cfg").eq("id",1).maybeSingle();if(s.data&&s.data.cfg)Object.assign(C,s.data.cfg);
  var p=await sb.from("products").select("*").order("sort");if(p.data&&p.data.length)C.prod=p.data.map(function(x){return {id:x.id,pf:x.pf,n:x.n,t:x.t,r:+x.r,a:x.a,b:x.b,bd:x.bd||"",on:x.active?1:0,ps:x.provider_service||""}})}catch(e){}
@@ -234,7 +276,7 @@ function wire(){
   r.onload=function(){var im=new Image();im.onload=function(){var s=Math.min(1,160/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*s));c.height=Math.max(1,Math.round(im.height*s));c.getContext("2d").drawImage(im,0,0,c.width,c.height);C.brand.logo=c.toDataURL("image/png");dirty=1;adm()};im.src=r.result};r.readAsDataURL(t.files[0])});
  A.addEventListener("click",function(e){var b=e.target.closest("[data-act]");if(!b)return;var a=b.dataset.act,i=+b.dataset.i;
   if(a=="back"){location.hash="";return}
-  if(a=="pub"){pub();return}if(a=="login"){login();return}if(a=="os"){os(b.dataset.id,b.dataset.v,b);return}if(a=="tgtest"){sb.functions.invoke("order-action",{body:{test:1}}).then(function(r){toast(r.error?"Telegram test failed. Check the bot setup.":"Test message sent to Telegram")});return}if(a=="out"){if(sb)sb.auth.signOut();ED=0;location.hash="";draw();return}
+  if(a=="pub"){pub();return}if(a=="login"){login();return}if(a=="refreshdash"){dash();return}if(a=="os"){os(b.dataset.id,b.dataset.v,b);return}if(a=="tgtest"){sb.functions.invoke("order-action",{body:{test:1}}).then(function(r){toast(r.error?"Telegram test failed. Check the bot setup.":"Test message sent to Telegram")});return}if(a=="out"){if(sb)sb.auth.signOut();ED=0;location.hash="";draw();return}
   if((a=="del"||a=="delpol")&&!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to remove";return}
   if(a=="tab")tab=b.dataset.v;
   else if(a=="add")C.prod.unshift({id:"p"+Date.now().toString(36),pf:st.p||"Instagram",n:"New service",t:"l",r:5,a:100,b:10000,bd:"",on:1});
