@@ -1,1 +1,44 @@
 
+name: Extract Website ZIP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract ZIP
+        run: |
+          mkdir extracted
+          unzip -o zksocial-site.zip -d extracted
+
+          shopt -s dotglob nullglob
+          items=(extracted/*)
+
+          if [ ${#items[@]} -eq 1 ] && [ -d "${items[0]}" ]; then
+            cp -a "${items[0]}"/. .
+          else
+            cp -a extracted/. .
+          fi
+
+          rm -rf extracted
+
+      - name: Commit extracted files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Extract website ZIP"
+            git push
+          fi
+
