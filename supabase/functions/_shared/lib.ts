@@ -72,3 +72,47 @@ export async function setStatus(id: string, status: "paid" | "completed" | "canc
   }
   return o;
 }
+
+// PayPal REST API helpers
+export function paypalBase() {
+  const mode = (Deno.env.get("PAYPAL_MODE") ?? "live").toLowerCase();
+
+  if (mode === "live") {
+    return "https://api-m.paypal.com";
+  }
+
+  if (mode === "sandbox") {
+    return "https://api-m.sandbox.paypal.com";
+  }
+
+  throw new Error("Invalid PAYPAL_MODE. Use live or sandbox.");
+}
+
+export async function paypalAccessToken(): Promise<string> {
+  const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
+  const secret = Deno.env.get("PAYPAL_SECRET");
+
+  if (!clientId || !secret) {
+    throw new Error("PayPal API credentials are missing.");
+  }
+
+  const credentials = btoa(`${clientId}:${secret}`);
+
+  const response = await fetch(`${paypalBase()}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
+  });
+
+  const result = await response.json();
+
+  if (!response.ok || !result.access_token) {
+    throw new Error("PayPal authentication failed.");
+  }
+
+  return result.access_token;
+}
+
