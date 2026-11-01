@@ -179,6 +179,71 @@ async function buy(){var P=cur();if(!P)return;var l=$("lnk"),m=$("mail"),v=l.val
  $("mod").classList.add("on");bs.forEach(function(x){x.disabled=false})}
  catch(e){toast(e.message||"Checkout failed");bs.forEach(function(x){x.disabled=false})}}
 
+
+async function paypalReturn(){
+  var params = new URLSearchParams(location.search);
+  var result = params.get("paypal");
+  var orderId = params.get("order_id");
+  var paypalOrderId = params.get("token");
+
+  if(result === "cancel"){
+    toast("PayPal payment was cancelled. Your order is still pending.");
+    return;
+  }
+
+  if(result !== "success") return;
+
+  if(!orderId || !paypalOrderId){
+    toast("Payment return details are missing. Contact support.");
+    return;
+  }
+
+  try {
+    toast("Verifying your PayPal payment...");
+
+    var response = await fetch(
+      ZK.SUPABASE_URL + "/functions/v1/paypal-capture-order",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: ZK.SUPABASE_ANON_KEY,
+          Authorization: "Bearer " + ZK.SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          order_id: orderId,
+          paypal_order_id: paypalOrderId
+        })
+      }
+    );
+
+    var data = await response.json();
+
+    if(!response.ok || !data.ok){
+      throw new Error(data.error || "Payment verification failed.");
+    }
+
+    $("oid").textContent =
+      "Order code #" + orderId.slice(0,8).toUpperCase();
+
+    $("sum").innerHTML =
+      "<b>Payment confirmed successfully.</b>" +
+      "<p>Your order is now being processed.</p>";
+
+    $("mod").classList.add("on");
+
+    history.replaceState(
+      null,
+      "",
+      location.pathname + location.hash
+    );
+
+  } catch(e) {
+    toast(e.message || "Payment verification failed.");
+  }
+}
+
+
 function hx(h){h=h.replace("#","");return [0,2,4].map(function(i){return parseInt(h.substr(i,2),16)||0})}
 function lum(h){var c=hx(h).map(function(v){v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}
 function apply(){var t=C.theme,r=document.documentElement.style;
