@@ -1,3 +1,4 @@
+
 name: Deploy ZKSocial Supabase Functions
 
 on:
@@ -7,6 +8,7 @@ on:
       - main
     paths:
       - 'supabase/functions/**'
+      - '.github/workflows/deploy-supabase.yml'
 
 jobs:
   deploy:
@@ -21,6 +23,16 @@ jobs:
         with:
           version: latest
 
+      - name: Check credentials
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$PROJECT_REF"
+          echo "Project reference length: ${#PROJECT_REF}"
+          supabase projects list
+
       - name: Deploy create-order
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -34,4 +46,14 @@ jobs:
       - name: Deploy telegram-bot
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase functions deploy telegra
+        run: supabase functions deploy telegram-bot --no-verify-jwt --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+
+      - name: Deploy paypal-capture-order
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy paypal-capture-order --no-verify-jwt --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+
+      - name: Deploy paypal-webhook
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy paypal-webhook --no-verify-jwt --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
